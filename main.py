@@ -16,10 +16,10 @@ app = FastAPI()
 # =========================================================
 
 TIMEOUT = httpx.Timeout(
-    connect=15.0,
-    read=120.0,
-    write=120.0,
-    pool=15.0
+    connect=20.0,
+    read=180.0,
+    write=180.0,
+    pool=20.0
 )
 
 HOP_BY_HOP_HEADERS = {
@@ -88,7 +88,6 @@ def rewrite_url(raw, base_url):
     )):
         return raw
 
-    # すでにプロキシURLなら二重変換しない
     if raw.startswith("/p/") or raw.startswith("/f/"):
         return raw
 
@@ -123,7 +122,7 @@ SRCSET_PATTERN = re.compile(
 
 
 IFRAME_PATTERN = re.compile(
-    r'<iframe\b(?P<tag>[^>]*)>',
+    r'<iframe\b[^>]*>',
     re.IGNORECASE | re.DOTALL
 )
 
@@ -162,6 +161,7 @@ def rewrite_iframe(match, base_url):
 
 def rewrite_srcset(match, base_url):
     value = match.group("value")
+
     parts = []
 
     for item in value.split(","):
@@ -175,8 +175,14 @@ def rewrite_srcset(match, base_url):
         if not fields:
             continue
 
-        fields[0] = rewrite_url(fields[0], base_url)
-        parts.append(" ".join(fields))
+        fields[0] = rewrite_url(
+            fields[0],
+            base_url
+        )
+
+        parts.append(
+            " ".join(fields)
+        )
 
     return (
         match.group("prefix")
@@ -198,7 +204,10 @@ def rewrite_css_urls(text, base_url):
         if raw.startswith("/p/") or raw.startswith("/f/"):
             return match.group(0)
 
-        new_url = rewrite_url(raw, base_url)
+        new_url = rewrite_url(
+            raw,
+            base_url
+        )
 
         return (
             "url("
@@ -208,40 +217,67 @@ def rewrite_css_urls(text, base_url):
             + ")"
         )
 
-    return pattern.sub(replace, text)
+    return pattern.sub(
+        replace,
+        text
+    )
 
+
+# =========================================================
+# JavaScript
+# =========================================================
 
 def rewrite_js(text, base_url):
     patterns = [
         (
             r'(\bfetch\s*\(\s*["\'])([^"\']+)(["\'])',
-            lambda m: m.group(1)
-            + rewrite_url(m.group(2), base_url)
-            + m.group(3)
+            lambda m:
+                m.group(1)
+                + rewrite_url(
+                    m.group(2),
+                    base_url
+                )
+                + m.group(3)
         ),
         (
             r'(\bimport\s*\(\s*["\'])([^"\']+)(["\'])',
-            lambda m: m.group(1)
-            + rewrite_url(m.group(2), base_url)
-            + m.group(3)
+            lambda m:
+                m.group(1)
+                + rewrite_url(
+                    m.group(2),
+                    base_url
+                )
+                + m.group(3)
         ),
         (
             r'(\blocation\.href\s*=\s*["\'])([^"\']+)(["\'])',
-            lambda m: m.group(1)
-            + rewrite_url(m.group(2), base_url)
-            + m.group(3)
+            lambda m:
+                m.group(1)
+                + rewrite_url(
+                    m.group(2),
+                    base_url
+                )
+                + m.group(3)
         ),
         (
             r'(\blocation\.assign\s*\(\s*["\'])([^"\']+)(["\'])',
-            lambda m: m.group(1)
-            + rewrite_url(m.group(2), base_url)
-            + m.group(3)
+            lambda m:
+                m.group(1)
+                + rewrite_url(
+                    m.group(2),
+                    base_url
+                )
+                + m.group(3)
         ),
         (
             r'(\blocation\.replace\s*\(\s*["\'])([^"\']+)(["\'])',
-            lambda m: m.group(1)
-            + rewrite_url(m.group(2), base_url)
-            + m.group(3)
+            lambda m:
+                m.group(1)
+                + rewrite_url(
+                    m.group(2),
+                    base_url
+                )
+                + m.group(3)
         )
     ]
 
@@ -257,20 +293,25 @@ def rewrite_js(text, base_url):
 
 
 def rewrite_html(text, base_url):
-    # iframeを最初に処理
     text = IFRAME_PATTERN.sub(
-        lambda m: rewrite_iframe(m, base_url),
+        lambda m:
+            rewrite_iframe(
+                m,
+                base_url
+            ),
         text
     )
 
-    # 通常のhref/src等
     def replace_attr(match):
         raw = match.group("url")
 
         if raw.startswith("/p/") or raw.startswith("/f/"):
             return match.group(0)
 
-        new_url = rewrite_url(raw, base_url)
+        new_url = rewrite_url(
+            raw,
+            base_url
+        )
 
         return (
             match.group("prefix")
@@ -279,22 +320,30 @@ def rewrite_html(text, base_url):
             + match.group("quote")
         )
 
-    text = ATTR_PATTERN.sub(replace_attr, text)
-
-    # srcset
-    text = SRCSET_PATTERN.sub(
-        lambda m: rewrite_srcset(m, base_url),
+    text = ATTR_PATTERN.sub(
+        replace_attr,
         text
     )
 
-    # CSS
-    text = rewrite_css_urls(text, base_url)
+    text = SRCSET_PATTERN.sub(
+        lambda m:
+            rewrite_srcset(
+                m,
+                base_url
+            ),
+        text
+    )
+
+    text = rewrite_css_urls(
+        text,
+        base_url
+    )
 
     return text
 
 
 # =========================================================
-# ツールバー
+# 操作バー
 # =========================================================
 
 TOOLBAR_SCRIPT = r"""
@@ -395,7 +444,7 @@ TOOLBAR_SCRIPT = r"""
             }
 
             select {
-                max-width: 105px;
+                max-width: 110px;
             }
         }
     `;
@@ -418,6 +467,7 @@ TOOLBAR_SCRIPT = r"""
     home.textContent = "⌂";
 
     const input = document.createElement("input");
+
     input.type = "text";
     input.value = currentUrl;
     input.placeholder = "URL";
@@ -428,24 +478,32 @@ TOOLBAR_SCRIPT = r"""
     const mode = document.createElement("select");
 
     const bufferOption = document.createElement("option");
+
     bufferOption.value = "buffer";
     bufferOption.textContent = "バッファ";
 
     const streamOption = document.createElement("option");
+
     streamOption.value = "stream";
     streamOption.textContent = "ストリーミング";
 
     mode.appendChild(bufferOption);
     mode.appendChild(streamOption);
 
-    const savedMode =
-        document.cookie
-            .split(";")
-            .map(x => x.trim())
-            .find(x => x.startsWith("pyproxy_mode="));
+    const savedMode = document.cookie
+        .split(";")
+        .map(function (x) {
+            return x.trim();
+        })
+        .find(function (x) {
+            return x.startsWith(
+                "pyproxy_mode="
+            );
+        });
 
     if (savedMode) {
-        const value = savedMode.split("=")[1];
+        const value =
+            savedMode.split("=")[1];
 
         if (value === "stream") {
             mode.value = "stream";
@@ -456,12 +514,17 @@ TOOLBAR_SCRIPT = r"""
         mode.value = "buffer";
     }
 
-    mode.addEventListener("change", function () {
-        document.cookie =
-            "pyproxy_mode=" +
-            encodeURIComponent(mode.value) +
-            "; path=/; max-age=31536000; SameSite=Lax";
-    });
+    mode.addEventListener(
+        "change",
+        function () {
+            document.cookie =
+                "pyproxy_mode=" +
+                encodeURIComponent(
+                    mode.value
+                ) +
+                "; path=/; max-age=31536000; SameSite=Lax";
+        }
+    );
 
     back.onclick = function () {
         history.back();
@@ -480,27 +543,33 @@ TOOLBAR_SCRIPT = r"""
     };
 
     function navigate() {
-        let url = input.value.trim();
+        let url =
+            input.value.trim();
 
         if (!url) {
             return;
         }
 
         if (!/^https?:\/\//i.test(url)) {
-            url = "https://" + url;
+            url =
+                "https://" + url;
         }
 
         location.href =
-            "/p/" + encodeURIComponent(url);
+            "/p/" +
+            encodeURIComponent(url);
     }
 
     go.onclick = navigate;
 
-    input.addEventListener("keydown", function (event) {
-        if (event.key === "Enter") {
-            navigate();
+    input.addEventListener(
+        "keydown",
+        function (event) {
+            if (event.key === "Enter") {
+                navigate();
+            }
         }
-    });
+    );
 
     bar.appendChild(back);
     bar.appendChild(forward);
@@ -519,7 +588,10 @@ def toolbar_html(base_url):
     safe_url = json.dumps(
         base_url,
         ensure_ascii=False
-    ).replace("</", "<\\/")
+    ).replace(
+        "</",
+        "<\\/"
+    )
 
     return (
         "<script>"
@@ -531,12 +603,10 @@ def toolbar_html(base_url):
     )
 
 
-# =========================================================
-# HTMLへツールバー追加
-# =========================================================
-
 def inject_toolbar(text, base_url):
-    toolbar = toolbar_html(base_url)
+    toolbar = toolbar_html(
+        base_url
+    )
 
     body_pattern = re.compile(
         r"<body\b[^>]*>",
@@ -545,22 +615,27 @@ def inject_toolbar(text, base_url):
 
     if body_pattern.search(text):
         return body_pattern.sub(
-            lambda m: m.group(0) + toolbar,
+            lambda m:
+                m.group(0) + toolbar,
             text,
             count=1
         )
 
-    return toolbar + text
+    return (
+        toolbar
+        + text
+    )
 
 
 # =========================================================
-# HTTPヘッダー
+# リクエストヘッダー
 # =========================================================
 
 def make_request_headers(request):
     headers = {}
 
     for key, value in request.headers.items():
+
         lower = key.lower()
 
         if lower in (
@@ -571,21 +646,27 @@ def make_request_headers(request):
             continue
 
         if lower == "cookie":
+
             cookies = []
 
             for item in value.split(";"):
+
                 item = item.strip()
 
                 if not item:
                     continue
 
-                if item.startswith("pyproxy_mode="):
+                if item.startswith(
+                    "pyproxy_mode="
+                ):
                     continue
 
                 cookies.append(item)
 
             if cookies:
-                headers["cookie"] = "; ".join(cookies)
+                headers["cookie"] = (
+                    "; ".join(cookies)
+                )
 
             continue
 
@@ -596,10 +677,15 @@ def make_request_headers(request):
     return headers
 
 
+# =========================================================
+# レスポンスヘッダー
+# =========================================================
+
 def make_response_headers(upstream):
     result = {}
 
     for key, value in upstream.headers.items():
+
         if key.lower() in HOP_BY_HOP_HEADERS:
             continue
 
@@ -616,7 +702,10 @@ def rewrite_set_cookie(value):
     parts = []
 
     for part in value.split(";"):
-        if part.strip().lower().startswith("domain="):
+
+        if part.strip().lower().startswith(
+            "domain="
+        ):
             continue
 
         parts.append(part)
@@ -625,7 +714,7 @@ def rewrite_set_cookie(value):
 
 
 # =========================================================
-# Proxy本体
+# Proxy
 # =========================================================
 
 async def proxy_request(
@@ -634,63 +723,119 @@ async def proxy_request(
     add_toolbar
 ):
     if not valid_target(target):
+
         return Response(
             "Invalid URL",
             status_code=400,
             media_type="text/plain"
         )
 
-    headers = make_request_headers(request)
+    headers = make_request_headers(
+        request
+    )
 
     body = await request.body()
 
     client = httpx.AsyncClient(
         timeout=TIMEOUT,
-        follow_redirects=False
+        follow_redirects=False,
+        http2=False,
+        trust_env=False
     )
 
     try:
-        upstream = await client.stream(
+
+        upstream_request = client.build_request(
             request.method,
             target,
             headers=headers,
             content=body
-        ).__aenter__()
+        )
+
+        upstream = await client.send(
+            upstream_request,
+            stream=True
+        )
 
     except Exception as exc:
+
         await client.aclose()
 
+        error_text = (
+            "Connection error: "
+            + type(exc).__name__
+            + ": "
+            + repr(exc)
+        )
+
+        print(
+            error_text,
+            flush=True
+        )
+
         return Response(
-            "Proxy error: " + str(exc),
+            error_text,
             status_code=502,
             media_type="text/plain"
         )
 
     status_code = upstream.status_code
-    response_headers = make_response_headers(upstream)
+
+    response_headers = make_response_headers(
+        upstream
+    )
+
+    # -----------------------------------------------------
+    # Redirect
+    # -----------------------------------------------------
 
     if "location" in response_headers:
-        location = response_headers["location"]
 
-        absolute = urljoin(target, location)
+        location = response_headers[
+            "location"
+        ]
+
+        absolute = urljoin(
+            target,
+            location
+        )
 
         if valid_target(absolute):
-            response_headers["location"] = make_proxy_url(
+
+            response_headers[
+                "location"
+            ] = make_proxy_url(
                 absolute
             )
 
+    # -----------------------------------------------------
+    # Cookie
+    # -----------------------------------------------------
+
+    cookie_list = []
+
     if "set-cookie" in upstream.headers:
-        cookies = upstream.headers.get_list("set-cookie")
 
-        response_headers.pop("set-cookie", None)
+        cookies = upstream.headers.get_list(
+            "set-cookie"
+        )
 
-        # StreamingResponseで複数Cookieを返すための追加処理
-        cookie_list = [
-            rewrite_set_cookie(cookie)
-            for cookie in cookies
-        ]
-    else:
-        cookie_list = []
+        response_headers.pop(
+            "set-cookie",
+            None
+        )
+
+        for cookie in cookies:
+
+            cookie_list.append(
+                rewrite_set_cookie(
+                    cookie
+                )
+            )
+
+    # -----------------------------------------------------
+    # Content-Type
+    # -----------------------------------------------------
 
     content_type = upstream.headers.get(
         "content-type",
@@ -699,7 +844,8 @@ async def proxy_request(
 
     is_html = (
         "text/html" in content_type
-        or "application/xhtml+xml" in content_type
+        or
+        "application/xhtml+xml" in content_type
     )
 
     is_css = (
@@ -708,20 +854,43 @@ async def proxy_request(
 
     is_js = (
         "javascript" in content_type
-        or "ecmascript" in content_type
+        or
+        "ecmascript" in content_type
     )
 
-    # HTML/CSS/JSはURL書き換えが必要なのでバッファ
-    if is_html or is_css or is_js:
+    # -----------------------------------------------------
+    # HTML / CSS / JS
+    # -----------------------------------------------------
+
+    if (
+        is_html
+        or is_css
+        or is_js
+    ):
+
         try:
+
             data = await upstream.aread()
 
         except Exception as exc:
+
             await upstream.aclose()
             await client.aclose()
 
+            error_text = (
+                "Read error: "
+                + type(exc).__name__
+                + ": "
+                + repr(exc)
+            )
+
+            print(
+                error_text,
+                flush=True
+            )
+
             return Response(
-                "Read error: " + str(exc),
+                error_text,
                 status_code=502,
                 media_type="text/plain"
             )
@@ -729,35 +898,42 @@ async def proxy_request(
         await upstream.aclose()
         await client.aclose()
 
-        encoding = "utf-8"
-
         try:
-            text_data = data.decode(encoding)
-        except UnicodeDecodeError:
+
             text_data = data.decode(
-                encoding,
+                "utf-8"
+            )
+
+        except UnicodeDecodeError:
+
+            text_data = data.decode(
+                "utf-8",
                 errors="replace"
             )
 
         if is_html:
+
             text_data = rewrite_html(
                 text_data,
                 target
             )
 
             if add_toolbar:
+
                 text_data = inject_toolbar(
                     text_data,
                     target
                 )
 
         elif is_css:
+
             text_data = rewrite_css_urls(
                 text_data,
                 target
             )
 
         elif is_js:
+
             text_data = rewrite_js(
                 text_data,
                 target
@@ -779,12 +955,15 @@ async def proxy_request(
         )
 
         response = Response(
-            content=text_data.encode("utf-8"),
+            content=text_data.encode(
+                "utf-8"
+            ),
             status_code=status_code,
             headers=response_headers
         )
 
         for cookie in cookie_list:
+
             response.headers.append(
                 "set-cookie",
                 cookie
@@ -792,24 +971,42 @@ async def proxy_request(
 
         return response
 
-    # =====================================================
-    # ストリーミング
-    # =====================================================
+    # -----------------------------------------------------
+    # 転送方式
+    # -----------------------------------------------------
 
     mode = request.cookies.get(
         "pyproxy_mode",
         "buffer"
     )
 
+    # =====================================================
+    # Streaming
+    # =====================================================
+
     if mode == "stream":
+
         async def iterator():
+
             try:
+
                 async for chunk in upstream.aiter_bytes(
                     64 * 1024
                 ):
+
                     yield chunk
 
+            except Exception as exc:
+
+                print(
+                    "STREAM ERROR:",
+                    type(exc).__name__,
+                    repr(exc),
+                    flush=True
+                )
+
             finally:
+
                 await upstream.aclose()
                 await client.aclose()
 
@@ -820,6 +1017,7 @@ async def proxy_request(
         )
 
         for cookie in cookie_list:
+
             response.headers.append(
                 "set-cookie",
                 cookie
@@ -828,18 +1026,32 @@ async def proxy_request(
         return response
 
     # =====================================================
-    # バッファ
+    # Buffer
     # =====================================================
 
     try:
+
         data = await upstream.aread()
 
     except Exception as exc:
+
         await upstream.aclose()
         await client.aclose()
 
+        error_text = (
+            "Read error: "
+            + type(exc).__name__
+            + ": "
+            + repr(exc)
+        )
+
+        print(
+            error_text,
+            flush=True
+        )
+
         return Response(
-            "Read error: " + str(exc),
+            error_text,
             status_code=502,
             media_type="text/plain"
         )
@@ -854,6 +1066,7 @@ async def proxy_request(
     )
 
     for cookie in cookie_list:
+
         response.headers.append(
             "set-cookie",
             cookie
@@ -868,16 +1081,22 @@ async def proxy_request(
 
 INDEX_HTML = """
 <!DOCTYPE html>
+
 <html lang="ja">
+
 <head>
+
 <meta charset="UTF-8">
+
 <meta
     name="viewport"
     content="width=device-width,initial-scale=1"
 >
+
 <title>Python Web Proxy</title>
 
 <style>
+
 * {
     box-sizing: border-box;
 }
@@ -890,8 +1109,10 @@ body {
 
 body {
     min-height: 100vh;
+
     background: #202124;
     color: white;
+
     font-family: Arial, sans-serif;
 
     display: flex;
@@ -900,7 +1121,10 @@ body {
 }
 
 .container {
-    width: min(700px, 94vw);
+    width: min(
+        700px,
+        94vw
+    );
 }
 
 h1 {
@@ -917,23 +1141,33 @@ form {
 input {
     flex: 1;
     min-width: 0;
+
     height: 48px;
+
     padding: 0 14px;
+
     border: 1px solid #5f6368;
     border-radius: 7px;
+
     background: #303134;
     color: white;
+
     font-size: 16px;
 }
 
 button {
     height: 48px;
+
     padding: 0 18px;
+
     border: 0;
     border-radius: 7px;
+
     background: #8ab4f8;
     color: #202124;
+
     font-weight: bold;
+
     cursor: pointer;
 }
 
@@ -943,18 +1177,24 @@ button:hover {
 
 .info {
     margin-top: 18px;
+
     color: #bdc1c6;
+
     font-size: 13px;
     line-height: 1.6;
 }
+
 </style>
+
 </head>
 
 <body>
 
 <div class="container">
 
-<h1>Python Web Proxy</h1>
+<h1>
+Python Web Proxy
+</h1>
 
 <form id="form">
 
@@ -966,43 +1206,56 @@ button:hover {
 >
 
 <button type="submit">
-    開く
+開く
 </button>
 
 </form>
 
 <div class="info">
-    URLを入力して開いてください。
-    ページ上部の操作バーから戻る・進む・再読み込み・
-    転送方式の変更ができます。
+
+URLを入力して開いてください。
+
 </div>
 
 </div>
 
 <script>
-document.getElementById("form").addEventListener(
-    "submit",
-    function (event) {
-        event.preventDefault();
 
-        let url =
-            document.getElementById("url").value.trim();
+document
+    .getElementById("form")
+    .addEventListener(
+        "submit",
+        function (event) {
 
-        if (!url) {
-            return;
+            event.preventDefault();
+
+            let url =
+                document
+                    .getElementById("url")
+                    .value
+                    .trim();
+
+            if (!url) {
+                return;
+            }
+
+            if (
+                !/^https?:\\/\\//i.test(url)
+            ) {
+                url =
+                    "https://" + url;
+            }
+
+            location.href =
+                "/p/" +
+                encodeURIComponent(url);
         }
+    );
 
-        if (!/^https?:\\/\\//i.test(url)) {
-            url = "https://" + url;
-        }
-
-        location.href =
-            "/p/" + encodeURIComponent(url);
-    }
-);
 </script>
 
 </body>
+
 </html>
 """
 
@@ -1013,11 +1266,15 @@ document.getElementById("form").addEventListener(
 
 @app.get("/")
 async def index():
-    return HTMLResponse(INDEX_HTML)
+
+    return HTMLResponse(
+        INDEX_HTML
+    )
 
 
 @app.get("/health")
 async def health():
+
     return {
         "status": "ok"
     }
@@ -1039,7 +1296,10 @@ async def proxy(
     target: str,
     request: Request
 ):
-    target = decode_target(target)
+
+    target = decode_target(
+        target
+    )
 
     return await proxy_request(
         request,
@@ -1064,7 +1324,10 @@ async def frame_proxy(
     target: str,
     request: Request
 ):
-    target = decode_target(target)
+
+    target = decode_target(
+        target
+    )
 
     return await proxy_request(
         request,
@@ -1075,16 +1338,18 @@ async def frame_proxy(
 
 @app.get("/favicon.ico")
 async def favicon():
+
     return Response(
         status_code=204
     )
 
 
 # =========================================================
-# Render起動
+# Render / ローカル起動
 # =========================================================
 
 if __name__ == "__main__":
+
     import uvicorn
 
     port = int(
